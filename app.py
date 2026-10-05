@@ -146,7 +146,7 @@ if excel_file and ciclos_selecionados:
                 
                 col_down1, col_down2 = st.columns(2)
                 with col_down1:
-                    st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                    st.download_button("📥 Baixar Relatório de Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                 with col_down2:
                     st.download_button("📥 Baixar Relatório de Voz", data=ppt_voz_final, file_name="Relatório_Voz_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                     
