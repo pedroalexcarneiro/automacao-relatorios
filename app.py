@@ -22,7 +22,7 @@ with col3:
 
 ciclos_selecionados = st.multiselect(
     "Selecione os ciclos que deseja incluir:",
-    ['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4'],
+    ['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4', 'Ciclo 5'],
     default=['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4']
 )
 
@@ -31,7 +31,7 @@ ciclos_selecionados = st.multiselect(
 # ==========================================
 # Verifica se tem o Excel E pelo menos UM dos templates
 if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionados:
-    if st.button("BAIXAR RELATÓRIO(s)", use_container_width=True):
+    if st.button("🚀 Gerar Relatórios Atualizados", use_container_width=True):
         
         with st.spinner('Processando dados e desenhando gráficos...'):
             # Leitura e formatação da base
@@ -161,7 +161,7 @@ if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionad
         
         if ppt_dig_final:
             with col_down1:
-                st.download_button("📥 Baixar Relatório de Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
         
         if ppt_voz_final:
             with col_down2:
