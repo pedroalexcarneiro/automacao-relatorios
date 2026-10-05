@@ -4,21 +4,15 @@ from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 import io
 
-st.set_page_config(page_title="Gerador de Relatórios ITS", layout="wide", page_icon="📊")
+st.set_page_config(page_title="Gerador de Relatórios ITS", layout="centered", page_icon="📊")
 
 st.title("📊 Automação de Relatórios Semanais")
-st.markdown("Faça o upload da base de dados e de pelo menos um dos relatórios da semana passada para gerar a versão atualizada.")
+st.markdown("Faça o upload da base de dados atualizada para gerar as apresentações da semana.")
 
 # ==========================================
-# UPLOAD DE FICHEIROS (Templates agora são opcionais)
+# UPLOAD APENAS DO EXCEL
 # ==========================================
-col1, col2, col3 = st.columns(3)
-with col1:
-    excel_file = st.file_uploader("1. Base de Dados (.xlsx)", type=["xlsx"])
-with col2:
-    template_dig_file = st.file_uploader("2. PPT Digital [Opcional]", type=["pptx"])
-with col3:
-    template_voz_file = st.file_uploader("3. PPT Voz [Opcional]", type=["pptx"])
+excel_file = st.file_uploader("Base de Dados (.xlsx)", type=["xlsx"])
 
 ciclos_selecionados = st.multiselect(
     "Selecione os ciclos que deseja incluir:",
@@ -26,15 +20,17 @@ ciclos_selecionados = st.multiselect(
     default=['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4']
 )
 
+# Nomes dos templates fixos no repositório do GitHub
+TEMPLATE_DIGITAL = 'Relatório - Digital.pptx'
+TEMPLATE_VOZ = 'Relatório - Voz.pptx'
+
 # ==========================================
 # LÓGICA DE PROCESSAMENTO
 # ==========================================
-# Verifica se tem o Excel E pelo menos UM dos templates
-if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionados:
+if excel_file and ciclos_selecionados:
     if st.button("🚀 Gerar Relatórios Atualizados", use_container_width=True):
         
-        with st.spinner('Processando dados e desenhando gráficos...'):
-            # Leitura e formatação da base
+        with st.spinner('Lendo a base e desenhando gráficos...'):
             df = pd.read_excel(excel_file, sheet_name='BASE BRUTA')
             df = df[df['Ciclo'].isin(ciclos_selecionados)].copy()
 
@@ -49,7 +45,6 @@ if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionad
             }
             df['Produto'] = df['Produto'].map(prod_map).fillna(df['Produto'])
 
-            # Funções auxiliares
             def get_volumes(prod, time_type):
                 return [df[(df['Produto'] == prod) & (df['Time'] == time_type)].groupby('Ciclo')['ID'].count().get(c, 0) for c in ciclos_selecionados]
 
@@ -67,8 +62,9 @@ if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionad
                 just = len(df_p[df_p['Detalhe SLA'] == 'Em Abono'])
                 return str(vol), str(fdb), med, str(just)
 
-            def processar_ppt(template_bytes, mapa_produtos):
-                prs = Presentation(template_bytes)
+            def processar_ppt(caminho_template, mapa_produtos):
+                # Lê o arquivo direto do GitHub
+                prs = Presentation(caminho_template)
                 for slide_idx_vol, dados in mapa_produtos.items():
                     slide_idx_nc = slide_idx_vol + 1
                     prod_name = dados['prod']
@@ -126,43 +122,33 @@ if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionad
                 prs.save(output)
                 output.seek(0)
                 return output
-            
-            # Variáveis para armazenar os ficheiros finais
-            ppt_dig_final = None
-            ppt_voz_final = None
 
-            # Processa o Digital APENAS se o utilizador fez o upload
-            if template_dig_file:
-                mapa_dig = {
-                    3: { 'prod': 'Serasa - Central de Ajuda', 'vol_antigos': ["43", "140", "[VOL]"], 'fdb_antigos': ["41", "137", "[FDB]"], 'med_antigos': ["85,47", "82,57", "[MED]"], 'just_antigos': ["4 monitorias", "5 monitorias", "[JUST] monitorias"] },
-                    6: { 'prod': 'Serasa - CHAT', 'vol_antigos': ["78", "316", "[VOL]"], 'fdb_antigos': ["76", "308", "[FDB]"], 'med_antigos': ["88,92", "83,87", "[MED]"], 'just_antigos': ["8 monitorias", "15 monitorias", "0 monitorias", "[JUST] monitorias"] },
-                    9: { 'prod': 'SERASA - GOV', 'vol_antigos': ["9", "33", "[VOL]"], 'fdb_antigos': ["9", "31", "[FDB]"], 'med_antigos': ["77,78", "88,97", "[MED]"], 'just_antigos': ["1 monitorias", "0 monitorias", "[JUST] monitorias"] },
-                    12:{ 'prod': 'Serasa - Reclame Aqui', 'vol_antigos': ["17", "65", "[VOL]"], 'fdb_antigos': ["17", "62", "[FDB]"], 'med_antigos': ["72,41", "76,11", "[MED]"], 'just_antigos': ["3 monitoria", "3 monitorias", "0 monitorias", "[JUST] monitorias"] }
-                }
-                ppt_dig_final = processar_ppt(template_dig_file, mapa_dig)
+            # Mapas com as referências numéricas do molde fixo
+            mapa_dig = {
+                3: { 'prod': 'Serasa - Central de Ajuda', 'vol_antigos': ["43", "140", "[VOL]"], 'fdb_antigos': ["41", "137", "[FDB]"], 'med_antigos': ["85,47", "82,57", "[MED]"], 'just_antigos': ["4 monitorias", "5 monitorias", "[JUST] monitorias"] },
+                6: { 'prod': 'Serasa - CHAT', 'vol_antigos': ["78", "316", "[VOL]"], 'fdb_antigos': ["76", "308", "[FDB]"], 'med_antigos': ["88,92", "83,87", "[MED]"], 'just_antigos': ["8 monitorias", "15 monitorias", "0 monitorias", "[JUST] monitorias"] },
+                9: { 'prod': 'SERASA - GOV', 'vol_antigos': ["9", "33", "[VOL]"], 'fdb_antigos': ["9", "31", "[FDB]"], 'med_antigos': ["77,78", "88,97", "[MED]"], 'just_antigos': ["1 monitorias", "0 monitorias", "[JUST] monitorias"] },
+                12:{ 'prod': 'Serasa - Reclame Aqui', 'vol_antigos': ["17", "65", "[VOL]"], 'fdb_antigos': ["17", "62", "[FDB]"], 'med_antigos': ["72,41", "76,11", "[MED]"], 'just_antigos': ["3 monitoria", "3 monitorias", "0 monitorias", "[JUST] monitorias"] }
+            }
 
-            # Processa Voz APENAS se o utilizador fez o upload
-            if template_voz_file:
-                mapa_voz = {
+            mapa_voz = {
                 3: { 'prod': 'Serasa - 0800 Premium', 'vol_antigos': ["63", "176", "[VOL]"], 'fdb_antigos': ["61", "173", "[FDB]"], 'med_antigos': ["81,73", "78,97", "[MED]"], 'just_antigos': ["1 monitoria", "10 monitorias", "0 feedbacks", "10 feedbacks", "[JUST] monitorias"] },
                 6: { 'prod': 'Serasa - CRC', 'vol_antigos': ["76", "447", "[VOL]"], 'fdb_antigos': ["52", "407", "[FDB]"], 'med_antigos': ["74,80", "72,13", "[MED]"], 'just_antigos': ["2 monitorias", "43 monitorias", "10 monitorias", "[JUST] monitorias"] },
-                9: { 'prod': 'SERASA - Cadastro Positivo', 
-                     'vol_antigos': ["7", "23", "[VOL]"], 
-                     'fdb_antigos': ["7", "21", "[FDB]"], 
-                     'med_antigos': ["90,57", "89,04", "90,523", "[MED]"], # <- Adicionado o 90,523 aqui!
-                     'just_antigos': ["0 monitorias", "[JUST] monitorias"] }
+                9: { 'prod': 'SERASA - Cadastro Positivo', 'vol_antigos': ["7", "23", "[VOL]"], 'fdb_antigos': ["7", "21", "[FDB]"], 'med_antigos': ["90,57", "89,04", "90,523", "[MED]"], 'just_antigos': ["0 monitorias", "[JUST] monitorias"] }
             }
-                ppt_voz_final = processar_ppt(template_voz_file, mapa_voz)
-
-        st.success("Tudo pronto! Ficheiros gerados com sucesso.")
-        
-        # Cria as colunas para os botões de download de forma dinâmica
-        col_down1, col_down2 = st.columns(2)
-        
-        if ppt_dig_final:
-            with col_down1:
-                st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-        
-        if ppt_voz_final:
-            with col_down2:
-                st.download_button("📥 Baixar Relatório de Voz", data=ppt_voz_final, file_name="Relatório_Voz_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+            
+            # Tenta gerar os arquivos
+            try:
+                ppt_dig_final = processar_ppt(TEMPLATE_DIGITAL, mapa_dig)
+                ppt_voz_final = processar_ppt(TEMPLATE_VOZ, mapa_voz)
+                
+                st.success("Tudo pronto! Ficheiros gerados com sucesso.")
+                
+                col_down1, col_down2 = st.columns(2)
+                with col_down1:
+                    st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                with col_down2:
+                    st.download_button("📥 Baixar Relatório de Voz", data=ppt_voz_final, file_name="Relatório_Voz_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                    
+            except Exception as e:
+                st.error(f"Erro ao ler os templates. Certifique-se de que fez o upload de '{TEMPLATE_DIGITAL}' e '{TEMPLATE_VOZ}' para o GitHub. Detalhe do erro: {e}")
