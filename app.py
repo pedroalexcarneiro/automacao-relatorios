@@ -7,18 +7,18 @@ import io
 st.set_page_config(page_title="Gerador de Relatórios ITS", layout="wide", page_icon="📊")
 
 st.title("📊 Automação de Relatórios Semanais")
-st.markdown("Faça o upload da sua base de dados atualizada e das apresentações da semana passada (como molde) para gerar os ficheiros novos mantendo a formatação.")
+st.markdown("Faça o upload da base de dados e de pelo menos um dos relatórios da semana passada para gerar a versão atualizada.")
 
 # ==========================================
-# UPLOAD DE FICHEIROS NO SITE
+# UPLOAD DE FICHEIROS (Templates agora são opcionais)
 # ==========================================
 col1, col2, col3 = st.columns(3)
 with col1:
     excel_file = st.file_uploader("1. Base de Dados (.xlsx)", type=["xlsx"])
 with col2:
-    template_dig_file = st.file_uploader("2. PPT Digital da Semana Passada (.pptx)", type=["pptx"])
+    template_dig_file = st.file_uploader("2. PPT Digital [Opcional]", type=["pptx"])
 with col3:
-    template_voz_file = st.file_uploader("3. PPT Voz da Semana Passada (.pptx)", type=["pptx"])
+    template_voz_file = st.file_uploader("3. PPT Voz [Opcional]", type=["pptx"])
 
 ciclos_selecionados = st.multiselect(
     "Selecione os ciclos que deseja incluir:",
@@ -27,12 +27,14 @@ ciclos_selecionados = st.multiselect(
 )
 
 # ==========================================
-# LÓGICA DE PROCESSAMENTO INTELIGENTE
+# LÓGICA DE PROCESSAMENTO
 # ==========================================
-if excel_file and template_dig_file and template_voz_file and ciclos_selecionados:
+# Verifica se tem o Excel E pelo menos UM dos templates
+if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionados:
     if st.button("🚀 Gerar Relatórios Atualizados", use_container_width=True):
         
-        with st.spinner('Processando dados e desenhando gráficos sem quebrar o layout...'):
+        with st.spinner('Processando dados e desenhando gráficos...'):
+            # Leitura e formatação da base
             df = pd.read_excel(excel_file, sheet_name='BASE BRUTA')
             df = df[df['Ciclo'].isin(ciclos_selecionados)].copy()
 
@@ -47,6 +49,7 @@ if excel_file and template_dig_file and template_voz_file and ciclos_selecionado
             }
             df['Produto'] = df['Produto'].map(prod_map).fillna(df['Produto'])
 
+            # Funções auxiliares
             def get_volumes(prod, time_type):
                 return [df[(df['Produto'] == prod) & (df['Time'] == time_type)].groupby('Ciclo')['ID'].count().get(c, 0) for c in ciclos_selecionados]
 
@@ -123,28 +126,39 @@ if excel_file and template_dig_file and template_voz_file and ciclos_selecionado
                 prs.save(output)
                 output.seek(0)
                 return output
-
-            # Mapas com as referências numéricas passadas
-            mapa_dig = {
-                3: { 'prod': 'Serasa - Central de Ajuda', 'vol_antigos': ["43", "140", "[VOL]"], 'fdb_antigos': ["41", "137", "[FDB]"], 'med_antigos': ["85,47", "82,57", "[MED]"], 'just_antigos': ["4 monitorias", "5 monitorias", "[JUST] monitorias"] },
-                6: { 'prod': 'Serasa - CHAT', 'vol_antigos': ["78", "316", "[VOL]"], 'fdb_antigos': ["76", "308", "[FDB]"], 'med_antigos': ["88,92", "83,87", "[MED]"], 'just_antigos': ["8 monitorias", "15 monitorias", "0 monitorias", "[JUST] monitorias"] },
-                9: { 'prod': 'SERASA - GOV', 'vol_antigos': ["9", "33", "[VOL]"], 'fdb_antigos': ["9", "31", "[FDB]"], 'med_antigos': ["77,78", "88,97", "[MED]"], 'just_antigos': ["1 monitorias", "0 monitorias", "[JUST] monitorias"] },
-                12:{ 'prod': 'Serasa - Reclame Aqui', 'vol_antigos': ["17", "65", "[VOL]"], 'fdb_antigos': ["17", "62", "[FDB]"], 'med_antigos': ["72,41", "76,11", "[MED]"], 'just_antigos': ["3 monitoria", "3 monitorias", "0 monitorias", "[JUST] monitorias"] }
-            }
-
-            mapa_voz = {
-                3: { 'prod': 'Serasa - 0800 Premium', 'vol_antigos': ["63", "176", "[VOL]"], 'fdb_antigos': ["61", "173", "[FDB]"], 'med_antigos': ["81,73", "78,97", "[MED]"], 'just_antigos': ["1 monitoria", "10 monitorias", "0 feedbacks", "10 feedbacks", "[JUST] monitorias"] },
-                6: { 'prod': 'Serasa - CRC', 'vol_antigos': ["76", "447", "[VOL]"], 'fdb_antigos': ["52", "407", "[FDB]"], 'med_antigos': ["74,80", "72,13", "[MED]"], 'just_antigos': ["2 monitorias", "43 monitorias", "10 monitorias", "[JUST] monitorias"] },
-                9: { 'prod': 'SERASA - Cadastro Positivo', 'vol_antigos': ["7", "23", "[VOL]"], 'fdb_antigos': ["7", "21", "[FDB]"], 'med_antigos': ["90,57", "89,04", "[MED]"], 'just_antigos': ["0 monitorias", "[JUST] monitorias"] }
-            }
             
-            ppt_dig_final = processar_ppt(template_dig_file, mapa_dig)
-            ppt_voz_final = processar_ppt(template_voz_file, mapa_voz)
+            # Variáveis para armazenar os ficheiros finais
+            ppt_dig_final = None
+            ppt_voz_final = None
 
-        st.success("Tudo pronto! Relatórios gerados com a formatação intacta.")
+            # Processa o Digital APENAS se o utilizador fez o upload
+            if template_dig_file:
+                mapa_dig = {
+                    3: { 'prod': 'Serasa - Central de Ajuda', 'vol_antigos': ["43", "140", "[VOL]"], 'fdb_antigos': ["41", "137", "[FDB]"], 'med_antigos': ["85,47", "82,57", "[MED]"], 'just_antigos': ["4 monitorias", "5 monitorias", "[JUST] monitorias"] },
+                    6: { 'prod': 'Serasa - CHAT', 'vol_antigos': ["78", "316", "[VOL]"], 'fdb_antigos': ["76", "308", "[FDB]"], 'med_antigos': ["88,92", "83,87", "[MED]"], 'just_antigos': ["8 monitorias", "15 monitorias", "0 monitorias", "[JUST] monitorias"] },
+                    9: { 'prod': 'SERASA - GOV', 'vol_antigos': ["9", "33", "[VOL]"], 'fdb_antigos': ["9", "31", "[FDB]"], 'med_antigos': ["77,78", "88,97", "[MED]"], 'just_antigos': ["1 monitorias", "0 monitorias", "[JUST] monitorias"] },
+                    12:{ 'prod': 'Serasa - Reclame Aqui', 'vol_antigos': ["17", "65", "[VOL]"], 'fdb_antigos': ["17", "62", "[FDB]"], 'med_antigos': ["72,41", "76,11", "[MED]"], 'just_antigos': ["3 monitoria", "3 monitorias", "0 monitorias", "[JUST] monitorias"] }
+                }
+                ppt_dig_final = processar_ppt(template_dig_file, mapa_dig)
+
+            # Processa Voz APENAS se o utilizador fez o upload
+            if template_voz_file:
+                mapa_voz = {
+                    3: { 'prod': 'Serasa - 0800 Premium', 'vol_antigos': ["63", "176", "[VOL]"], 'fdb_antigos': ["61", "173", "[FDB]"], 'med_antigos': ["81,73", "78,97", "[MED]"], 'just_antigos': ["1 monitoria", "10 monitorias", "0 feedbacks", "10 feedbacks", "[JUST] monitorias"] },
+                    6: { 'prod': 'Serasa - CRC', 'vol_antigos': ["76", "447", "[VOL]"], 'fdb_antigos': ["52", "407", "[FDB]"], 'med_antigos': ["74,80", "72,13", "[MED]"], 'just_antigos': ["2 monitorias", "43 monitorias", "10 monitorias", "[JUST] monitorias"] },
+                    9: { 'prod': 'SERASA - Cadastro Positivo', 'vol_antigos': ["7", "23", "[VOL]"], 'fdb_antigos': ["7", "21", "[FDB]"], 'med_antigos': ["90,57", "89,04", "[MED]"], 'just_antigos': ["0 monitorias", "[JUST] monitorias"] }
+                }
+                ppt_voz_final = processar_ppt(template_voz_file, mapa_voz)
+
+        st.success("Tudo pronto! Ficheiros gerados com sucesso.")
         
+        # Cria as colunas para os botões de download de forma dinâmica
         col_down1, col_down2 = st.columns(2)
-        with col_down1:
-            st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_NOVO.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-        with col_down2:
-            st.download_button("📥 Baixar Relatório de Voz", data=ppt_voz_final, file_name="Relatório_Voz_NOVO.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+        
+        if ppt_dig_final:
+            with col_down1:
+                st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+        
+        if ppt_voz_final:
+            with col_down2:
+                st.download_button("📥 Baixar Relatório de Voz", data=ppt_voz_final, file_name="Relatório_Voz_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
