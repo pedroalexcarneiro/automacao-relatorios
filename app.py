@@ -22,7 +22,7 @@ with col3:
 
 ciclos_selecionados = st.multiselect(
     "Selecione os ciclos que deseja incluir:",
-    ['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4', 'Ciclo 5'],
+    ['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4'],
     default=['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4']
 )
 
@@ -31,7 +31,7 @@ ciclos_selecionados = st.multiselect(
 # ==========================================
 # Verifica se tem o Excel E pelo menos UM dos templates
 if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionados:
-    if st.button("🚀 Gerar Relatórios Atualizados", use_container_width=True):
+    if st.button("BAIXAR RELATÓRIO(s)", use_container_width=True):
         
         with st.spinner('Processando dados e desenhando gráficos...'):
             # Leitura e formatação da base
@@ -144,10 +144,14 @@ if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionad
             # Processa Voz APENAS se o utilizador fez o upload
             if template_voz_file:
                 mapa_voz = {
-                    3: { 'prod': 'Serasa - 0800 Premium', 'vol_antigos': ["63", "176", "[VOL]"], 'fdb_antigos': ["61", "173", "[FDB]"], 'med_antigos': ["81,73", "78,97", "[MED]"], 'just_antigos': ["1 monitoria", "10 monitorias", "0 feedbacks", "10 feedbacks", "[JUST] monitorias"] },
-                    6: { 'prod': 'Serasa - CRC', 'vol_antigos': ["76", "447", "[VOL]"], 'fdb_antigos': ["52", "407", "[FDB]"], 'med_antigos': ["74,80", "72,13", "[MED]"], 'just_antigos': ["2 monitorias", "43 monitorias", "10 monitorias", "[JUST] monitorias"] },
-                    9: { 'prod': 'SERASA - Cadastro Positivo', 'vol_antigos': ["7", "23", "[VOL]"], 'fdb_antigos': ["7", "21", "[FDB]"], 'med_antigos': ["90,57", "89,04", "[MED]"], 'just_antigos': ["0 monitorias", "[JUST] monitorias"] }
-                }
+                3: { 'prod': 'Serasa - 0800 Premium', 'vol_antigos': ["63", "176", "[VOL]"], 'fdb_antigos': ["61", "173", "[FDB]"], 'med_antigos': ["81,73", "78,97", "[MED]"], 'just_antigos': ["1 monitoria", "10 monitorias", "0 feedbacks", "10 feedbacks", "[JUST] monitorias"] },
+                6: { 'prod': 'Serasa - CRC', 'vol_antigos': ["76", "447", "[VOL]"], 'fdb_antigos': ["52", "407", "[FDB]"], 'med_antigos': ["74,80", "72,13", "[MED]"], 'just_antigos': ["2 monitorias", "43 monitorias", "10 monitorias", "[JUST] monitorias"] },
+                9: { 'prod': 'SERASA - Cadastro Positivo', 
+                     'vol_antigos': ["7", "23", "[VOL]"], 
+                     'fdb_antigos': ["7", "21", "[FDB]"], 
+                     'med_antigos': ["90,57", "89,04", "90,523", "[MED]"], # <- Adicionado o 90,523 aqui!
+                     'just_antigos': ["0 monitorias", "[JUST] monitorias"] }
+            }
                 ppt_voz_final = processar_ppt(template_voz_file, mapa_voz)
 
         st.success("Tudo pronto! Ficheiros gerados com sucesso.")
@@ -157,7 +161,7 @@ if excel_file and (template_dig_file or template_voz_file) and ciclos_selecionad
         
         if ppt_dig_final:
             with col_down1:
-                st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                st.download_button("📥 Baixar Relatório de Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
         
         if ppt_voz_final:
             with col_down2:
