@@ -68,7 +68,7 @@ if uploaded_file:
         st.stop()
 
     st.subheader("🗓️ Configuração dos 4 Ciclos")
-    st.caption("Marque apenas os ciclos que deseja atualizar. Os ciclos desmarcados ficarão zerados nos gráficos.")
+    st.caption("Marque apenas os ciclos que deseja atualizar. Os ciclos desmarcados não aparecerão nos gráficos.")
 
     cols_ciclos = st.columns(4)
     config_ciclos = {}
@@ -84,6 +84,12 @@ if uploaded_file:
     # 3. PROCESSAMENTO E REGRAS DE NEGÓCIO
     # ==========================================
     if st.button("🚀 Gerar Relatórios Atualizados", use_container_width=True):
+        # Apenas os ciclos marcados entram nos gráficos
+        ciclos_ativos = [c for c in TODOS_CICLOS if config_ciclos[c]['ativo']]
+        if not ciclos_ativos:
+            st.warning("Marque pelo menos um ciclo para atualizar.")
+            st.stop()
+
         with st.spinner("Aplicando fórmulas na base bruta e atualizando apresentações..."):
             df = df_raw.copy()
 
@@ -167,31 +173,28 @@ if uploaded_file:
                 df['Fdb_Count'] = 0
 
             # ==========================================
-            # 4. FUNÇÕES DE AGREGAÇÃO (MANTENDO CICLOS INATIVOS EM ZERO)
+            # 4. FUNÇÕES DE AGREGAÇÃO (SOMENTE CICLOS ATIVOS)
             # ==========================================
             def get_volumes(prod, time_type):
                 sub = df[(df['Produto_Padrao'] == prod) & (df['Time'] == time_type)]
                 contagem = sub.groupby('Ciclo')[col_id].count()
-                return [int(contagem.get(c, 0)) if config_ciclos[c]['ativo'] else 0 for c in TODOS_CICLOS]
+                return [int(contagem.get(c, 0)) for c in ciclos_ativos]
 
             def get_medias(prod, time_type):
                 sub = df[(df['Produto_Padrao'] == prod) & (df['Time'] == time_type)]
                 medias = sub.groupby('Ciclo')['Nota_Num'].mean().round(2)
-                return [float(medias.get(c, 0.0)) if config_ciclos[c]['ativo'] else 0.0 for c in TODOS_CICLOS]
+                return [float(medias.get(c, 0.0)) for c in ciclos_ativos]
 
             def get_nc_ncg(prod, class_type):
                 sub = df[(df['Produto_Padrao'] == prod) & (df['Classificação'] == class_type)]
                 contagem = sub.groupby('Ciclo')[col_id].count()
-                return [int(contagem.get(c, 0)) if config_ciclos[c]['ativo'] else 0 for c in TODOS_CICLOS]
+                return [int(contagem.get(c, 0)) for c in ciclos_ativos]
 
             def get_sla_pct(prod, class_type, grupo):
-                # Percentual (0 a 1) de cada grupo de SLA dentro de NC ou NCG, por ciclo
+                # Percentual (0 a 1) de cada grupo de SLA dentro de NC ou NCG, por ciclo ativo
                 sub = df[(df['Produto_Padrao'] == prod) & (df['Classificação'] == class_type)]
                 valores = []
-                for c in TODOS_CICLOS:
-                    if not config_ciclos[c]['ativo']:
-                        valores.append(0.0)
-                        continue
+                for c in ciclos_ativos:
                     s = sub[sub['Ciclo'] == c]
                     total = len(s)
                     if total == 0:
@@ -219,7 +222,7 @@ if uploaded_file:
                     slide_vol = prs.slides[slide_idx_vol]
                     slide_nc = prs.slides[slide_idx_nc]
 
-                    # 1. Atualizar Gráficos (Sempre com os 4 ciclos no eixo X)
+                    # 1. Atualizar Gráficos (somente os ciclos ativos no eixo X)
                     for s in [slide_vol, slide_nc]:
                         for shape in s.shapes:
                             if shape.has_chart:
@@ -230,28 +233,28 @@ if uploaded_file:
                                     # Percentuais: No Prazo / Fora do Prazo / Justificado, para NC ou NCG
                                     classe = 'NCG' if title.strip().endswith('NCG') else 'NC'
                                     c_data = CategoryChartData(number_format='0%')
-                                    c_data.categories = TODOS_CICLOS
+                                    c_data.categories = ciclos_ativos
                                     for grupo in ['No Prazo', 'Fora do Prazo', 'Justificado']:
                                         c_data.add_series(grupo, get_sla_pct(prod_name, classe, grupo))
                                     chart.replace_data(c_data)
 
                                 elif "QUANTIDADE" in title:
                                     c_data = CategoryChartData()
-                                    c_data.categories = TODOS_CICLOS
+                                    c_data.categories = ciclos_ativos
                                     c_data.add_series('Operação', get_volumes(prod_name, 'Operação'))
                                     c_data.add_series('Qualidade', get_volumes(prod_name, 'Qualidade'))
                                     chart.replace_data(c_data)
 
                                 elif "MÉDIA" in title:
                                     c_data = CategoryChartData()
-                                    c_data.categories = TODOS_CICLOS
+                                    c_data.categories = ciclos_ativos
                                     c_data.add_series('Operação', get_medias(prod_name, 'Operação'))
                                     c_data.add_series('Qualidade', get_medias(prod_name, 'Qualidade'))
                                     chart.replace_data(c_data)
 
                                 elif "VOLUME" in title:
                                     c_data = CategoryChartData()
-                                    c_data.categories = TODOS_CICLOS
+                                    c_data.categories = ciclos_ativos
                                     c_data.add_series('NC', get_nc_ncg(prod_name, 'NC'))
                                     c_data.add_series('NCG', get_nc_ncg(prod_name, 'NCG'))
                                     chart.replace_data(c_data)
@@ -303,7 +306,7 @@ if uploaded_file:
                 ppt_voz_final = processar_ppt(TEMPLATE_VOZ, mapa_voz)
 
                 st.success(
-                    f"Relatórios gerados! {len(df)} monitorias processadas dentro dos ciclos selecionados. "
+                    f"Relatórios gerados! {len(df)} monitorias processadas nos ciclos: {', '.join(ciclos_ativos)}. "
                     f"{qtd_adicionais} monitorias da ficha 'Monitoras Adicionais' foram desconsideradas."
                 )
 
