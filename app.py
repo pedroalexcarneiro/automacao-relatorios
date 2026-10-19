@@ -233,7 +233,7 @@ if uploaded_file:
                                 if "CUMPRIMENTO DO SLA" in title:
                                     # Percentuais: No Prazo / Fora do Prazo / Justificado, para NC ou NCG
                                     classe = 'NCG' if title.strip().endswith('NCG') else 'NC'
-                                    c_data = CategoryChartData(number_format='0.00%')
+                                    c_data = CategoryChartData(number_format='0%')
                                     c_data.categories = TODOS_CICLOS
                                     for grupo in ['No Prazo', 'Fora do Prazo', 'Justificado']:
                                         c_data.add_series(grupo, get_sla_pct(prod_name, classe, grupo))
