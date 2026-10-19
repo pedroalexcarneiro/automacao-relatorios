@@ -3,6 +3,7 @@ import pandas as pd
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 import io
+import re
 from datetime import date
 
 st.set_page_config(page_title="Gerador de Relatórios ITS", layout="wide", page_icon="📊")
@@ -47,6 +48,11 @@ def carregar_base(file):
         xls = pd.ExcelFile(file)
         sheet = 'BASE BRUTA' if 'BASE BRUTA' in xls.sheet_names else xls.sheet_names[0]
         return pd.read_excel(file, sheet_name=sheet)
+
+def substituir_parcial(texto, de, para):
+    # Só troca o número inteiro: "0 monitorias" não pode casar dentro de "10 monitorias"
+    padrao = r'(?<![\d,.])' + re.escape(de) + r'(?!\d)'
+    return re.sub(padrao, para, texto)
 
 # ==========================================
 # 2. CONFIGURAÇÃO DE CICLOS E DATAS
@@ -135,6 +141,13 @@ if uploaded_file:
             # Filtra apenas as linhas que caíram nos ciclos ativos selecionados
             df = df[df['Ciclo'].notna()].copy()
 
+            # Grupo de SLA usado nos gráficos de cumprimento (Em Abono = Justificado)
+            df['SLA_Grupo'] = df['Detalhe SLA'].str.lower().map({
+                'no prazo': 'No Prazo',
+                'fora do prazo': 'Fora do Prazo',
+                'em abono': 'Justificado'
+            }).fillna('Outro')
+
             # F) Padronização dos Nomes de Produtos
             prod_map = {
                 'CRC': 'Serasa - CRC',
@@ -175,12 +188,28 @@ if uploaded_file:
                 contagem = sub.groupby('Ciclo')[col_id].count()
                 return [int(contagem.get(c, 0)) if config_ciclos[c]['ativo'] else 0 for c in TODOS_CICLOS]
 
+            def get_sla_pct(prod, class_type, grupo):
+                # Percentual (0 a 1) de cada grupo de SLA dentro de NC ou NCG, por ciclo
+                sub = df[(df['Produto_Padrao'] == prod) & (df['Classificação'] == class_type)]
+                valores = []
+                for c in TODOS_CICLOS:
+                    if not config_ciclos[c]['ativo']:
+                        valores.append(0.0)
+                        continue
+                    s = sub[sub['Ciclo'] == c]
+                    total = len(s)
+                    if total == 0:
+                        valores.append(0.0)
+                    else:
+                        valores.append(round(float((s['SLA_Grupo'] == grupo).sum()) / total, 4))
+                return valores
+
             def obter_dados_texto(prod_name):
                 df_p = df[df['Produto_Padrao'] == prod_name]
                 vol = len(df_p)
                 fdb = int(df_p['Fdb_Count'].sum())
                 med = f"{df_p['Nota_Num'].mean():.2f}".replace('.', ',') if vol > 0 else "0,00"
-                just = len(df_p[df_p['Detalhe SLA'].str.lower() == 'em abono'])
+                just = len(df_p[df_p['SLA_Grupo'] == 'Justificado'])
                 return str(vol), str(fdb), med, str(just)
 
             # ==========================================
@@ -200,18 +229,33 @@ if uploaded_file:
                             if shape.has_chart:
                                 chart = shape.chart
                                 title = chart.chart_title.text_frame.text.upper() if chart.has_title else ""
-                                c_data = CategoryChartData()
-                                c_data.categories = TODOS_CICLOS
 
-                                if "QUANTIDADE" in title:
+                                if "CUMPRIMENTO DO SLA" in title:
+                                    # Percentuais: No Prazo / Fora do Prazo / Justificado, para NC ou NCG
+                                    classe = 'NCG' if title.strip().endswith('NCG') else 'NC'
+                                    c_data = CategoryChartData(number_format='0.00%')
+                                    c_data.categories = TODOS_CICLOS
+                                    for grupo in ['No Prazo', 'Fora do Prazo', 'Justificado']:
+                                        c_data.add_series(grupo, get_sla_pct(prod_name, classe, grupo))
+                                    chart.replace_data(c_data)
+
+                                elif "QUANTIDADE" in title:
+                                    c_data = CategoryChartData()
+                                    c_data.categories = TODOS_CICLOS
                                     c_data.add_series('Operação', get_volumes(prod_name, 'Operação'))
                                     c_data.add_series('Qualidade', get_volumes(prod_name, 'Qualidade'))
                                     chart.replace_data(c_data)
+
                                 elif "MÉDIA" in title:
+                                    c_data = CategoryChartData()
+                                    c_data.categories = TODOS_CICLOS
                                     c_data.add_series('Operação', get_medias(prod_name, 'Operação'))
                                     c_data.add_series('Qualidade', get_medias(prod_name, 'Qualidade'))
                                     chart.replace_data(c_data)
+
                                 elif "VOLUME" in title:
+                                    c_data = CategoryChartData()
+                                    c_data.categories = TODOS_CICLOS
                                     c_data.add_series('NC', get_nc_ncg(prod_name, 'NC'))
                                     c_data.add_series('NCG', get_nc_ncg(prod_name, 'NCG'))
                                     chart.replace_data(c_data)
@@ -235,11 +279,10 @@ if uploaded_file:
                                     for run in paragraph.runs:
                                         texto_limpo = run.text.strip()
                                         for de, para in sub_exatas:
-                                            if texto_limpo == de or texto_limpo == f" {de} ":
+                                            if texto_limpo == de:
                                                 run.text = run.text.replace(de, para)
                                         for de, para in sub_parciais:
-                                            if de in run.text:
-                                                run.text = run.text.replace(de, para)
+                                            run.text = substituir_parcial(run.text, de, para)
 
                 output = io.BytesIO()
                 prs.save(output)
@@ -274,7 +317,7 @@ if uploaded_file:
                 with col_down2:
                     st.download_button("📥 Baixar Relatório de Voz", data=ppt_voz_final, file_name="Relatório_Voz_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                 with col_down3:
-                    # Permite baixar a base já tratada (sem as monitorias adicionais) com as colunas criadas para conferência
+                    # Base tratada (sem as monitorias adicionais) com as colunas criadas para conferência
                     buffer_excel = io.BytesIO()
                     df.to_excel(buffer_excel, index=False, sheet_name='BASE BRUTA')
                     buffer_excel.seek(0)
