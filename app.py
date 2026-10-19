@@ -33,6 +33,9 @@ MONITORES_QUALIDADE = {
 
 TODOS_CICLOS = ['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4']
 
+# Coluna usada para definir o ciclo de cada monitoria
+COLUNA_DATA_CICLO = 'Data Monitoria'
+
 # Nomes dos templates fixos no repositório do GitHub
 TEMPLATE_DIGITAL = 'Relatório - Digital.pptx'
 TEMPLATE_VOZ = 'Relatório - Voz.pptx'
@@ -60,16 +63,9 @@ def substituir_parcial(texto, de, para):
 if uploaded_file:
     df_raw = carregar_base(uploaded_file)
 
-    # Identifica colunas de data disponíveis para o filtro de lançamento
-    colunas_data = [c for c in df_raw.columns if any(k in c.lower() for k in ['data', 'lancamento', 'lançamento', 'cadastro', 'avaliacao', 'avaliação', 'criacao', 'criação'])]
-    if not colunas_data:
-        colunas_data = list(df_raw.columns)
-
-    col_data_escolhida = st.selectbox(
-        "Selecione a coluna que representa a Data de Lançamento da monitoria:",
-        options=colunas_data,
-        index=0
-    )
+    if COLUNA_DATA_CICLO not in df_raw.columns:
+        st.error(f"A base não tem a coluna '{COLUNA_DATA_CICLO}'. Verifique a exportação.")
+        st.stop()
 
     st.subheader("🗓️ Configuração dos 4 Ciclos")
     st.caption("Marque apenas os ciclos que deseja atualizar. Os ciclos desmarcados ficarão zerados nos gráficos.")
@@ -129,8 +125,8 @@ if uploaded_file:
             # D) Regra de Detalhe SLA (Substituir "Vence Hoje" por "No Prazo")
             df['Detalhe SLA'] = df[col_sla].astype(str).str.strip().replace("Vence Hoje", "No Prazo")
 
-            # E) Mapeamento de Ciclos por Intervalo de Data
-            df['_data_lancamento'] = pd.to_datetime(df[col_data_escolhida], dayfirst=True, errors='coerce').dt.date
+            # E) Mapeamento de Ciclos por Intervalo de Data (sempre pela Data Monitoria)
+            df['_data_lancamento'] = pd.to_datetime(df[COLUNA_DATA_CICLO], dayfirst=True, errors='coerce').dt.date
             df['Ciclo'] = None
 
             for nome_ciclo, cfg in config_ciclos.items():
