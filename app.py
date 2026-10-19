@@ -15,7 +15,7 @@ st.markdown("Faça o upload da exportação bruta de monitorias e defina os inte
 # ==========================================
 uploaded_file = st.file_uploader("1. Base Bruta de Monitorias (.csv ou .xlsx)", type=["csv", "xlsx"])
 
-# Lista oficial de monitores da Qualidade (Coluna Q)
+# Lista oficial de monitores da Qualidade
 MONITORES_QUALIDADE = {
     "Rodrigo Ramos Novais",
     "Carlos Alessandro Silva Paiva Junior",
@@ -53,12 +53,12 @@ def carregar_base(file):
 # ==========================================
 if uploaded_file:
     df_raw = carregar_base(uploaded_file)
-    
+
     # Identifica colunas de data disponíveis para o filtro de lançamento
     colunas_data = [c for c in df_raw.columns if any(k in c.lower() for k in ['data', 'lancamento', 'lançamento', 'cadastro', 'avaliacao', 'avaliação', 'criacao', 'criação'])]
     if not colunas_data:
         colunas_data = list(df_raw.columns)
-        
+
     col_data_escolhida = st.selectbox(
         "Selecione a coluna que representa a Data de Lançamento da monitoria:",
         options=colunas_data,
@@ -67,10 +67,10 @@ if uploaded_file:
 
     st.subheader("🗓️ Configuração dos 4 Ciclos")
     st.caption("Marque apenas os ciclos que deseja atualizar. Os ciclos desmarcados ficarão zerados nos gráficos.")
-    
+
     cols_ciclos = st.columns(4)
     config_ciclos = {}
-    
+
     for idx, nome_ciclo in enumerate(TODOS_CICLOS):
         with cols_ciclos[idx]:
             ativo = st.checkbox(f"Atualizar {nome_ciclo}", value=(idx == 0), key=f"chk_{idx}")
@@ -85,18 +85,25 @@ if uploaded_file:
         with st.spinner("Aplicando fórmulas na base bruta e atualizando apresentações..."):
             df = df_raw.copy()
 
-            # A) Identificação das colunas pelas posições originais do Excel (ou nomes)
-            col_nota = 'Nota' if 'Nota' in df.columns else df.columns[4]          # Coluna E (índice 4)
-            col_monitor = df.columns[16] if len(df.columns) > 16 else 'Monitor'   # Coluna Q (índice 16)
-            col_sla = 'Detalhe SLA' if 'Detalhe SLA' in df.columns else df.columns[-1] # Última coluna
-            col_id = 'ID' if 'ID' in df.columns else df.columns[0]                # Coluna A (ID)
-            
+            # 0) Exclui monitorias lançadas na ficha "Monitoras Adicionais" (não entram no resultado)
+            qtd_adicionais = 0
+            if 'Questionario' in df.columns:
+                eh_adicional = df['Questionario'].astype(str).str.strip().str.lower() == 'monitoras adicionais'
+                qtd_adicionais = int(eh_adicional.sum())
+                df = df[~eh_adicional].copy()
+
+            # A) Identificação das colunas (por nome, com fallback para a posição original do Excel)
+            col_nota = 'Nota' if 'Nota' in df.columns else df.columns[4]                 # Coluna E (índice 4)
+            col_monitor = 'Monitor' if 'Monitor' in df.columns else df.columns[16]       # Coluna Q (índice 16)
+            col_sla = 'Detalhe SLA' if 'Detalhe SLA' in df.columns else df.columns[-1]   # Última coluna
+            col_id = 'ID' if 'ID' in df.columns else df.columns[0]                       # Coluna A (ID)
+
             # Coluna de Produto
             col_prod = next((c for c in df.columns if 'produto' in c.lower() or 'canal' in c.lower() or 'ilha' in c.lower()), 'Produto')
 
             # B) Tratamento da Nota e Regra de Classificação: =SE(E2=0;"NCG";SE(E2=100;"Excelência";"NC"))
             df['Nota_Num'] = pd.to_numeric(df[col_nota].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-            
+
             def classificar_nota(nota):
                 if nota == 0:
                     return "NCG"
@@ -104,10 +111,10 @@ if uploaded_file:
                     return "Excelência"
                 else:
                     return "NC"
-            
+
             df['Classificação'] = df['Nota_Num'].apply(classificar_nota)
 
-            # C) Regra de Time (Qualidade vs Operação na Coluna Q)
+            # C) Regra de Time (Qualidade vs Operação, pelo nome do monitor)
             monitores_norm = {m.strip().lower() for m in MONITORES_QUALIDADE}
             df['Time'] = df[col_monitor].astype(str).str.strip().str.lower().apply(
                 lambda x: "Qualidade" if x in monitores_norm else "Operação"
@@ -119,7 +126,7 @@ if uploaded_file:
             # E) Mapeamento de Ciclos por Intervalo de Data
             df['_data_lancamento'] = pd.to_datetime(df[col_data_escolhida], dayfirst=True, errors='coerce').dt.date
             df['Ciclo'] = None
-            
+
             for nome_ciclo, cfg in config_ciclos.items():
                 if cfg['ativo']:
                     mascara = (df['_data_lancamento'] >= cfg['ini']) & (df['_data_lancamento'] <= cfg['fim'])
@@ -186,7 +193,7 @@ if uploaded_file:
                     prod_name = dados['prod']
                     slide_vol = prs.slides[slide_idx_vol]
                     slide_nc = prs.slides[slide_idx_nc]
-                    
+
                     # 1. Atualizar Gráficos (Sempre com os 4 ciclos no eixo X)
                     for s in [slide_vol, slide_nc]:
                         for shape in s.shapes:
@@ -195,7 +202,7 @@ if uploaded_file:
                                 title = chart.chart_title.text_frame.text.upper() if chart.has_title else ""
                                 c_data = CategoryChartData()
                                 c_data.categories = TODOS_CICLOS
-                                
+
                                 if "QUANTIDADE" in title:
                                     c_data.add_series('Operação', get_volumes(prod_name, 'Operação'))
                                     c_data.add_series('Qualidade', get_volumes(prod_name, 'Qualidade'))
@@ -211,16 +218,16 @@ if uploaded_file:
 
                     # 2. Atualizar Textos (preservando formatação)
                     novo_vol, novo_fdb, nova_med, novas_just = obter_dados_texto(prod_name)
-                    
+
                     sub_exatas = []
                     for v_antigo in dados['vol_antigos']: sub_exatas.append((v_antigo, novo_vol))
                     for v_antigo in dados['fdb_antigos']: sub_exatas.append((v_antigo, novo_fdb))
                     for v_antigo in dados['med_antigos']: sub_exatas.append((v_antigo, nova_med))
-                    
+
                     sub_parciais = []
-                    for v_antigo in dados['just_antigos']: 
+                    for v_antigo in dados['just_antigos']:
                         sub_parciais.append((v_antigo, f"{novas_just} monitorias"))
-                        
+
                     for s in [slide_vol, slide_nc]:
                         for shape in s.shapes:
                             if shape.has_text_frame:
@@ -233,7 +240,7 @@ if uploaded_file:
                                         for de, para in sub_parciais:
                                             if de in run.text:
                                                 run.text = run.text.replace(de, para)
-                
+
                 output = io.BytesIO()
                 prs.save(output)
                 output.seek(0)
@@ -255,20 +262,23 @@ if uploaded_file:
             try:
                 ppt_dig_final = processar_ppt(TEMPLATE_DIGITAL, mapa_dig)
                 ppt_voz_final = processar_ppt(TEMPLATE_VOZ, mapa_voz)
-                
-                st.success(f"Relatórios gerados! {len(df)} monitorias processadas dentro dos ciclos selecionados.")
-                
+
+                st.success(
+                    f"Relatórios gerados! {len(df)} monitorias processadas dentro dos ciclos selecionados. "
+                    f"{qtd_adicionais} monitorias da ficha 'Monitoras Adicionais' foram desconsideradas."
+                )
+
                 col_down1, col_down2, col_down3 = st.columns(3)
                 with col_down1:
                     st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                 with col_down2:
                     st.download_button("📥 Baixar Relatório de Voz", data=ppt_voz_final, file_name="Relatório_Voz_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                 with col_down3:
-                    # Bônus: permite baixar a base já tratada com as colunas criadas para conferência
+                    # Permite baixar a base já tratada (sem as monitorias adicionais) com as colunas criadas para conferência
                     buffer_excel = io.BytesIO()
                     df.to_excel(buffer_excel, index=False, sheet_name='BASE BRUTA')
                     buffer_excel.seek(0)
                     st.download_button("📄 Baixar Base Tratada (.xlsx)", data=buffer_excel, file_name="Base_Monitorias_Tratada.xlsx")
-                    
+
             except Exception as e:
                 st.error(f"Erro ao processar os templates: {e}")
