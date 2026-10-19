@@ -59,7 +59,7 @@ if uploaded_file:
     if not colunas_data:
         colunas_data = list(df_raw.columns)
         
-    col_ data_escolhida = st.selectbox(
+    col_data_escolhida = st.selectbox(
         "Selecione a coluna que representa a Data de Lançamento da monitoria:",
         options=colunas_data,
         index=0
