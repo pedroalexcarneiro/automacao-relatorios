@@ -6,17 +6,11 @@ import io
 import re
 from datetime import date
 
-st.set_page_config(page_title="Gerador de Relatórios ITS", layout="wide", page_icon="📊")
-
-st.title("📊 Automação de Relatórios Semanais")
-st.markdown("Faça o upload da exportação bruta de monitorias e defina os intervalos de datas dos ciclos ativos.")
+st.set_page_config(page_title="Relatórios ITS", layout="wide")
 
 # ==========================================
-# 1. UPLOAD DA BASE BRUTA
+# CONSTANTES
 # ==========================================
-uploaded_file = st.file_uploader("1. Base Bruta de Monitorias (.csv ou .xlsx)", type=["csv", "xlsx"])
-
-# Lista oficial de monitores da Qualidade
 MONITORES_QUALIDADE = {
     "Rodrigo Ramos Novais",
     "Carlos Alessandro Silva Paiva Junior",
@@ -32,13 +26,11 @@ MONITORES_QUALIDADE = {
 }
 
 TODOS_CICLOS = ['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4']
-
-# Coluna usada para definir o ciclo de cada monitoria
 COLUNA_DATA_CICLO = 'Data Monitoria'
-
-# Nomes dos templates fixos no repositório do GitHub
 TEMPLATE_DIGITAL = 'Relatório - Digital.pptx'
 TEMPLATE_VOZ = 'Relatório - Voz.pptx'
+MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 def carregar_base(file):
     if file.name.endswith('.csv'):
@@ -58,8 +50,21 @@ def substituir_parcial(texto, de, para):
     return re.sub(padrao, para, texto)
 
 # ==========================================
-# 2. CONFIGURAÇÃO DE CICLOS E DATAS
+# CABEÇALHO
 # ==========================================
+st.title("Relatórios Semanais de Monitorias")
+st.caption("Atualize os relatórios Digital e de Voz a partir da exportação bruta de monitorias.")
+
+# ==========================================
+# 1. BASE BRUTA
+# ==========================================
+st.header("1. Base bruta")
+uploaded_file = st.file_uploader(
+    "Exportação de monitorias (.csv ou .xlsx)",
+    type=["csv", "xlsx"],
+    label_visibility="collapsed"
+)
+
 if uploaded_file:
     df_raw = carregar_base(uploaded_file)
 
@@ -67,30 +72,38 @@ if uploaded_file:
         st.error(f"A base não tem a coluna '{COLUNA_DATA_CICLO}'. Verifique a exportação.")
         st.stop()
 
-    st.subheader("🗓️ Configuração dos 4 Ciclos")
-    st.caption("Marque apenas os ciclos que deseja atualizar. Os ciclos desmarcados não aparecerão nos gráficos.")
+    st.caption(f"{len(df_raw):,} linhas carregadas · arquivo: {uploaded_file.name}".replace(",", "."))
+
+    # ==========================================
+    # 2. CICLOS
+    # ==========================================
+    st.header("2. Ciclos a atualizar")
+    st.caption("Marque os ciclos que serão atualizados e informe o período de cada um. Ciclos desmarcados não aparecem nos gráficos.")
 
     cols_ciclos = st.columns(4)
     config_ciclos = {}
 
     for idx, nome_ciclo in enumerate(TODOS_CICLOS):
         with cols_ciclos[idx]:
-            ativo = st.checkbox(f"Atualizar {nome_ciclo}", value=(idx == 0), key=f"chk_{idx}")
-            dt_ini = st.date_input(f"Início ({nome_ciclo})", value=date.today(), disabled=not ativo, key=f"ini_{idx}")
-            dt_fim = st.date_input(f"Fim ({nome_ciclo})", value=date.today(), disabled=not ativo, key=f"fim_{idx}")
-            config_ciclos[nome_ciclo] = {'ativo': ativo, 'ini': dt_ini, 'fim': dt_fim}
+            with st.container(border=True):
+                st.markdown(f"**{nome_ciclo}**")
+                ativo = st.checkbox("Atualizar", value=(idx == 0), key=f"chk_{idx}")
+                dt_ini = st.date_input("Início", value=date.today(), disabled=not ativo, key=f"ini_{idx}", format="DD/MM/YYYY")
+                dt_fim = st.date_input("Fim", value=date.today(), disabled=not ativo, key=f"fim_{idx}", format="DD/MM/YYYY")
+                config_ciclos[nome_ciclo] = {'ativo': ativo, 'ini': dt_ini, 'fim': dt_fim}
 
     # ==========================================
-    # 3. PROCESSAMENTO E REGRAS DE NEGÓCIO
+    # 3. PROCESSAMENTO
     # ==========================================
-    if st.button("🚀 Gerar Relatórios Atualizados", use_container_width=True):
-        # Apenas os ciclos marcados entram nos gráficos
+    st.header("3. Gerar relatórios")
+
+    if st.button("Gerar relatórios", type="primary", use_container_width=True):
         ciclos_ativos = [c for c in TODOS_CICLOS if config_ciclos[c]['ativo']]
         if not ciclos_ativos:
             st.warning("Marque pelo menos um ciclo para atualizar.")
             st.stop()
 
-        with st.spinner("Aplicando fórmulas na base bruta e atualizando apresentações..."):
+        with st.spinner("Processando a base e atualizando as apresentações..."):
             df = df_raw.copy()
 
             # 0) Exclui monitorias lançadas na ficha "Monitoras Adicionais" (não entram no resultado)
@@ -173,7 +186,7 @@ if uploaded_file:
                 df['Fdb_Count'] = 0
 
             # ==========================================
-            # 4. FUNÇÕES DE AGREGAÇÃO (SOMENTE CICLOS ATIVOS)
+            # FUNÇÕES DE AGREGAÇÃO (SOMENTE CICLOS ATIVOS)
             # ==========================================
             def get_volumes(prod, time_type):
                 sub = df[(df['Produto_Padrao'] == prod) & (df['Time'] == time_type)]
@@ -212,7 +225,7 @@ if uploaded_file:
                 return str(vol), str(fdb), med, str(just)
 
             # ==========================================
-            # 5. ATUALIZAÇÃO DOS POWERPOINTS
+            # ATUALIZAÇÃO DOS POWERPOINTS
             # ==========================================
             def processar_ppt(caminho_template, mapa_produtos):
                 prs = Presentation(caminho_template)
@@ -230,7 +243,6 @@ if uploaded_file:
                                 title = chart.chart_title.text_frame.text.upper() if chart.has_title else ""
 
                                 if "CUMPRIMENTO DO SLA" in title:
-                                    # Percentuais: No Prazo / Fora do Prazo / Justificado, para NC ou NCG
                                     classe = 'NCG' if title.strip().endswith('NCG') else 'NC'
                                     c_data = CategoryChartData(number_format='0%')
                                     c_data.categories = ciclos_ativos
@@ -305,22 +317,47 @@ if uploaded_file:
                 ppt_dig_final = processar_ppt(TEMPLATE_DIGITAL, mapa_dig)
                 ppt_voz_final = processar_ppt(TEMPLATE_VOZ, mapa_voz)
 
-                st.success(
-                    f"Relatórios gerados! {len(df)} monitorias processadas nos ciclos: {', '.join(ciclos_ativos)}. "
-                    f"{qtd_adicionais} monitorias da ficha 'Monitoras Adicionais' foram desconsideradas."
-                )
+                # Base tratada para conferência
+                buffer_excel = io.BytesIO()
+                df.to_excel(buffer_excel, index=False, sheet_name='BASE BRUTA')
+                buffer_excel.seek(0)
 
-                col_down1, col_down2, col_down3 = st.columns(3)
-                with col_down1:
-                    st.download_button("📥 Baixar Relatório Digital", data=ppt_dig_final, file_name="Relatório_Digital_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-                with col_down2:
-                    st.download_button("📥 Baixar Relatório de Voz", data=ppt_voz_final, file_name="Relatório_Voz_Atualizado.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-                with col_down3:
-                    # Base tratada (sem as monitorias adicionais) com as colunas criadas para conferência
-                    buffer_excel = io.BytesIO()
-                    df.to_excel(buffer_excel, index=False, sheet_name='BASE BRUTA')
-                    buffer_excel.seek(0)
-                    st.download_button("📄 Baixar Base Tratada (.xlsx)", data=buffer_excel, file_name="Base_Monitorias_Tratada.xlsx")
+                # ==========================================
+                # 4. RESULTADOS
+                # ==========================================
+                st.header("4. Resultados")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Monitorias processadas", f"{len(df):,}".replace(",", "."))
+                m2.metric("Ficha 'Monitoras Adicionais' excluída", f"{qtd_adicionais:,}".replace(",", "."))
+                m3.metric("Ciclos atualizados", len(ciclos_ativos))
+                st.caption("Ciclos: " + ", ".join(ciclos_ativos))
+
+                st.subheader("Downloads")
+                d1, d2, d3 = st.columns(3)
+                with d1:
+                    st.download_button(
+                        "Relatório Digital (.pptx)",
+                        data=ppt_dig_final,
+                        file_name="Relatório_Digital_Atualizado.pptx",
+                        mime=MIME_PPTX,
+                        use_container_width=True
+                    )
+                with d2:
+                    st.download_button(
+                        "Relatório de Voz (.pptx)",
+                        data=ppt_voz_final,
+                        file_name="Relatório_Voz_Atualizado.pptx",
+                        mime=MIME_PPTX,
+                        use_container_width=True
+                    )
+                with d3:
+                    st.download_button(
+                        "Base tratada (.xlsx)",
+                        data=buffer_excel,
+                        file_name="Base_Monitorias_Tratada.xlsx",
+                        mime=MIME_XLSX,
+                        use_container_width=True
+                    )
 
             except Exception as e:
                 st.error(f"Erro ao processar os templates: {e}")
