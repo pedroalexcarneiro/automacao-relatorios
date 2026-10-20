@@ -32,6 +32,11 @@ TEMPLATE_VOZ = 'Relatório - Voz.pptx'
 MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+         'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+ORDINAIS = {1: 'primeiro', 2: 'segundo', 3: 'terceiro', 4: 'quarto'}
+PADRAO_MES_CAPA = re.compile(r'^(' + '|'.join(MESES) + r') \d{4}$')
+
 def carregar_base(file):
     if file.name.endswith('.csv'):
         try:
@@ -225,6 +230,51 @@ if uploaded_file:
                 return str(vol), str(fdb), med, str(just)
 
             # ==========================================
+            # MAPAS DE PRODUTOS E TEXTOS DOS TEMPLATES
+            # ==========================================
+            mapa_dig = {
+                3: { 'prod': 'Serasa - Central de Ajuda', 'vol_antigos': ["43", "140", "[VOL]"], 'fdb_antigos': ["41", "137", "[FDB]"], 'med_antigos': ["85,47", "82,57", "[MED]"], 'just_antigos': ["4 monitorias", "5 monitorias", "[JUST] monitorias"] },
+                6: { 'prod': 'Serasa - CHAT', 'vol_antigos': ["78", "316", "[VOL]"], 'fdb_antigos': ["76", "308", "[FDB]"], 'med_antigos': ["88,92", "83,87", "[MED]"], 'just_antigos': ["8 monitorias", "15 monitorias", "0 monitorias", "[JUST] monitorias"] },
+                9: { 'prod': 'SERASA - GOV', 'vol_antigos': ["9", "33", "[VOL]"], 'fdb_antigos': ["9", "31", "[FDB]"], 'med_antigos': ["77,78", "88,97", "[MED]"], 'just_antigos': ["1 monitorias", "0 monitorias", "[JUST] monitorias"] },
+                12:{ 'prod': 'Serasa - Reclame Aqui', 'vol_antigos': ["17", "65", "[VOL]"], 'fdb_antigos': ["17", "62", "[FDB]"], 'med_antigos': ["72,41", "76,11", "[MED]"], 'just_antigos': ["3 monitoria", "3 monitorias", "0 monitorias", "[JUST] monitorias"] }
+            }
+
+            mapa_voz = {
+                3: { 'prod': 'Serasa - 0800 Premium', 'vol_antigos': ["63", "176", "[VOL]"], 'fdb_antigos': ["61", "173", "[FDB]"], 'med_antigos': ["81,73", "78,97", "[MED]"], 'just_antigos': ["1 monitoria", "10 monitorias", "0 feedbacks", "10 feedbacks", "[JUST] monitorias"] },
+                6: { 'prod': 'Serasa - CRC', 'vol_antigos': ["76", "447", "[VOL]"], 'fdb_antigos': ["52", "407", "[FDB]"], 'med_antigos': ["74,80", "72,13", "[MED]"], 'just_antigos': ["2 monitorias", "43 monitorias", "10 monitorias", "[JUST] monitorias"] },
+                9: { 'prod': 'SERASA - Cadastro Positivo', 'vol_antigos': ["7", "23", "[VOL]"], 'fdb_antigos': ["7", "21", "[FDB]"], 'med_antigos': ["90,57", "89,04", "90,523", "[MED]"], 'just_antigos': ["0 monitorias", "[JUST] monitorias"] }
+            }
+
+            # ==========================================
+            # PERÍODO (MÊS E CICLOS) PARA OS TEXTOS DO TEMPLATE
+            # ==========================================
+            ativos_idx = [TODOS_CICLOS.index(c) + 1 for c in ciclos_ativos]
+            inicio_ref = config_ciclos[ciclos_ativos[0]]['ini']
+            mes_ref = MESES[inicio_ref.month - 1]
+            ano_ref = inicio_ref.year
+
+            meses_envolvidos = {config_ciclos[c]['ini'].month for c in ciclos_ativos}
+            if len(meses_envolvidos) > 1:
+                st.warning("Os ciclos marcados caem em meses diferentes. O texto usará o mês do primeiro ciclo.")
+
+            ords = [ORDINAIS[i] for i in ativos_idx]
+            lista_ords = ords[0] if len(ords) == 1 else ", ".join(ords[:-1]) + " e " + ords[-1]
+            palavra_ciclo = 'ciclo' if len(ords) == 1 else 'ciclos'
+            trecho_ciclos = f"do {lista_ords} {palavra_ciclo} de {mes_ref.lower()}"
+
+            def atualizar_periodo(prs):
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if not shape.has_text_frame:
+                            continue
+                        for p in shape.text_frame.paragraphs:
+                            for run in p.runs:
+                                if PADRAO_MES_CAPA.match(run.text.strip()):
+                                    run.text = f"{mes_ref} {ano_ref}"
+                                elif 'do primeiro ciclo de setembro' in run.text:
+                                    run.text = run.text.replace('do primeiro ciclo de setembro', trecho_ciclos)
+
+            # ==========================================
             # ATUALIZAÇÃO DOS POWERPOINTS
             # ==========================================
             def processar_ppt(caminho_template, mapa_produtos):
@@ -295,23 +345,13 @@ if uploaded_file:
                                         for de, para in sub_parciais:
                                             run.text = substituir_parcial(run.text, de, para)
 
+                # 3. Atualizar mês da capa/cabeçalhos e ciclos do texto de abertura
+                atualizar_periodo(prs)
+
                 output = io.BytesIO()
                 prs.save(output)
                 output.seek(0)
                 return output
-
-            mapa_dig = {
-                3: { 'prod': 'Serasa - Central de Ajuda', 'vol_antigos': ["43", "140", "[VOL]"], 'fdb_antigos': ["41", "137", "[FDB]"], 'med_antigos': ["85,47", "82,57", "[MED]"], 'just_antigos': ["4 monitorias", "5 monitorias", "[JUST] monitorias"] },
-                6: { 'prod': 'Serasa - CHAT', 'vol_antigos': ["78", "316", "[VOL]"], 'fdb_antigos': ["76", "308", "[FDB]"], 'med_antigos': ["88,92", "83,87", "[MED]"], 'just_antigos': ["8 monitorias", "15 monitorias", "0 monitorias", "[JUST] monitorias"] },
-                9: { 'prod': 'SERASA - GOV', 'vol_antigos': ["9", "33", "[VOL]"], 'fdb_antigos': ["9", "31", "[FDB]"], 'med_antigos': ["77,78", "88,97", "[MED]"], 'just_antigos': ["1 monitorias", "0 monitorias", "[JUST] monitorias"] },
-                12:{ 'prod': 'Serasa - Reclame Aqui', 'vol_antigos': ["17", "65", "[VOL]"], 'fdb_antigos': ["17", "62", "[FDB]"], 'med_antigos': ["72,41", "76,11", "[MED]"], 'just_antigos': ["3 monitoria", "3 monitorias", "0 monitorias", "[JUST] monitorias"] }
-            }
-
-            mapa_voz = {
-                3: { 'prod': 'Serasa - 0800 Premium', 'vol_antigos': ["63", "176", "[VOL]"], 'fdb_antigos': ["61", "173", "[FDB]"], 'med_antigos': ["81,73", "78,97", "[MED]"], 'just_antigos': ["1 monitoria", "10 monitorias", "0 feedbacks", "10 feedbacks", "[JUST] monitorias"] },
-                6: { 'prod': 'Serasa - CRC', 'vol_antigos': ["76", "447", "[VOL]"], 'fdb_antigos': ["52", "407", "[FDB]"], 'med_antigos': ["74,80", "72,13", "[MED]"], 'just_antigos': ["2 monitorias", "43 monitorias", "10 monitorias", "[JUST] monitorias"] },
-                9: { 'prod': 'SERASA - Cadastro Positivo', 'vol_antigos': ["7", "23", "[VOL]"], 'fdb_antigos': ["7", "21", "[FDB]"], 'med_antigos': ["90,57", "89,04", "90,523", "[MED]"], 'just_antigos': ["0 monitorias", "[JUST] monitorias"] }
-            }
 
             try:
                 ppt_dig_final = processar_ppt(TEMPLATE_DIGITAL, mapa_dig)
@@ -330,13 +370,13 @@ if uploaded_file:
                 m1.metric("Monitorias processadas", f"{len(df):,}".replace(",", "."))
                 m2.metric("Ficha 'Monitoras Adicionais' excluída", f"{qtd_adicionais:,}".replace(",", "."))
                 m3.metric("Ciclos atualizados", len(ciclos_ativos))
-                st.caption("Ciclos: " + ", ".join(ciclos_ativos))
+                st.caption(f"Período: {mes_ref} {ano_ref} · Ciclos: " + ", ".join(ciclos_ativos))
 
                 st.subheader("Downloads")
                 d1, d2, d3 = st.columns(3)
                 with d1:
                     st.download_button(
-                        "Relatório de Digital (.pptx)",
+                        "Relatório Digital (.pptx)",
                         data=ppt_dig_final,
                         file_name="Relatório_Digital_Atualizado.pptx",
                         mime=MIME_PPTX,
