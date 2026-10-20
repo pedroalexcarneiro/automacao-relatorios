@@ -336,7 +336,7 @@ if uploaded_file:
                 d1, d2, d3 = st.columns(3)
                 with d1:
                     st.download_button(
-                        "Relatório Digital (.pptx)",
+                        "Relatório de Digital (.pptx)",
                         data=ppt_dig_final,
                         file_name="Relatório_Digital_Atualizado.pptx",
                         mime=MIME_PPTX,
