@@ -23,6 +23,7 @@ MONITORES_QUALIDADE = {
     "Marcus Braga Dos Santos",
     "Ana Paula Silva Dos Santos",
     "Lady Lahanna Dos Santos Sutil"
+    "Catiane Cavanol"
 }
 
 TODOS_CICLOS = ['Ciclo 1', 'Ciclo 2', 'Ciclo 3', 'Ciclo 4']
