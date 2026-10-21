@@ -33,6 +33,10 @@ TEMPLATE_VOZ = 'Relatório - Voz.pptx'
 MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+# Escala fixa dos gráficos de média (eixo começando em 0)
+EIXO_MEDIA_MIN = 0
+EIXO_MEDIA_MAX = 100
+
 MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 ORDINAIS = {1: 'primeiro', 2: 'segundo', 3: 'terceiro', 4: 'quarto'}
@@ -314,6 +318,9 @@ if uploaded_file:
                                     c_data.add_series('Operação', get_medias(prod_name, 'Operação'))
                                     c_data.add_series('Qualidade', get_medias(prod_name, 'Qualidade'))
                                     chart.replace_data(c_data)
+                                    # Eixo fixo: sempre começa em 0 (e vai até 100) em todos os canais
+                                    chart.value_axis.minimum_scale = EIXO_MEDIA_MIN
+                                    chart.value_axis.maximum_scale = EIXO_MEDIA_MAX
 
                                 elif "VOLUME" in title:
                                     c_data = CategoryChartData()
